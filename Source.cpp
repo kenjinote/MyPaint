@@ -20,6 +20,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	static HBITMAP hBitmap;
 	static HDC hdcBitmap;
 	static BOOL bMouseDown;
+	static BOOL bTouchDown;
 	static INT width;
 	static INT height;
 	static COLORREF color;
@@ -55,14 +56,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		{
 			width = LOWORD(lParam);
 			height = HIWORD(lParam);
-
-			//ビットマップの作成
 			const HDC hdc = GetDC(hWnd);
 			hdcBitmap = CreateCompatibleDC(hdc);
 			hBitmap = CreateCompatibleBitmap(hdc, width, height);
 			SelectObject(hdcBitmap, hBitmap);
 			ReleaseDC(hWnd, hdc);
-
 			PatBlt(hdcBitmap, 0, 0, width, height, WHITENESS);
 		}
 		break;
@@ -90,6 +88,41 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			ReleaseCapture();
 			SelectObject(hdcBitmap, hOldPen);
 			bMouseDown = FALSE;
+		}
+		break;
+	case WM_POINTERDOWN:
+		{
+			POINTER_INFO pinfo;
+			GetPointerInfo(LOWORD(wParam), &pinfo);
+			POINT p = { pinfo.ptPixelLocation.x, pinfo.ptPixelLocation.y };
+			ScreenToClient(hWnd, &p);
+			const int nPenWidth = GetDlgItemInt(hWnd, 109, 0, 0);
+			hPen = CreatePen(PS_SOLID, nPenWidth, color);
+			hOldPen = (HPEN)SelectObject(hdcBitmap, hPen);
+			MoveToEx(hdcBitmap, p.x, p.y, 0);
+			bTouchDown = TRUE;
+		}
+		break;
+	case WM_POINTERUPDATE:
+		if (bTouchDown)
+		{
+			POINTER_INFO pinfo;
+			GetPointerInfo(LOWORD(wParam), &pinfo);
+			POINT p = { pinfo.ptPixelLocation.x, pinfo.ptPixelLocation.y };
+			ScreenToClient(hWnd, &p);
+			LineTo(hdcBitmap, p.x, p.y);
+			InvalidateRect(hWnd, 0, 0);
+		}
+		break;
+	case WM_POINTERUP:
+		if (bTouchDown)
+		{
+			POINTER_INFO pinfo;
+			GetPointerInfo(LOWORD(wParam), &pinfo);
+			POINT p = { pinfo.ptPixelLocation.x, pinfo.ptPixelLocation.y };
+			ScreenToClient(hWnd, &p);
+			SelectObject(hdcBitmap, hOldPen);
+			bTouchDown = FALSE;
 		}
 		break;
 	case WM_PAINT:
