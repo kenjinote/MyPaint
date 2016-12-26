@@ -3,3 +3,8 @@
 ################################################################################
 
 /.vs/MyPaint/v14
+/Release
+/x64/Debug
+/MyPaint.aps
+/MyPaint.VC.VC.opendb
+/MyPaint.VC.db

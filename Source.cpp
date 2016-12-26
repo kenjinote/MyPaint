@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <windowsx.h>
+#include "resource.h"
 
 TCHAR szClassName[] = TEXT("Window");
 
@@ -201,13 +202,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		0,
 		LoadCursor(0,IDC_ARROW),
 		(HBRUSH)(COLOR_WINDOW + 1),
-		0,
+		MAKEINTRESOURCE(IDR_MENU1),
 		szClassName
 	};
 	RegisterClass(&wndclass);
 	HWND hWnd = CreateWindow(
 		szClassName,
-		TEXT("Window"),
+		TEXT("MyPaint"),
 		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
 		CW_USEDEFAULT,
 		0,
