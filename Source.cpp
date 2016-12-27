@@ -1,7 +1,10 @@
 ﻿#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
+#pragma comment(lib,"comctl32")
+
 #include <windows.h>
 #include <windowsx.h>
+#include <commctrl.h>
 #include "resource.h"
 
 TCHAR szClassName[] = TEXT("Window");
@@ -18,18 +21,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	static HWND hButton7;
 	static HWND hButton8;
 	static HWND hButton9;
+	static HWND hScaleTrack;
 	static HBITMAP hBitmap;
 	static HDC hdcBitmap;
 	static BOOL bMouseDown;
 	static BOOL bTouchDown;
-	static INT width;
-	static INT height;
+	static INT x;
+	static INT y;
+	static INT nSrcWidth;
+	static INT nSrcHeight;
+	static INT nDstWidth;
+	static INT nDstHeight;
 	static COLORREF color;
 	static HPEN hPen;
 	static HPEN hOldPen;
+	static INT_PTR nScaleValue = 100;
 	switch (msg)
 	{
 	case WM_CREATE:
+		InitCommonControls();
 		hButton1 = CreateWindow(TEXT("BUTTON"), TEXT("クリア"), WS_VISIBLE | WS_CHILD, 0, 0, 0, 0, hWnd, (HMENU)100, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		hButton2 = CreateWindow(TEXT("BUTTON"), TEXT("保存"), WS_VISIBLE | WS_CHILD, 0, 0, 0, 0, hWnd, (HMENU)101, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		hButton3 = CreateWindow(TEXT("BUTTON"), TEXT("黒"), WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON | BS_PUSHLIKE, 0, 0, 0, 0, hWnd, (HMENU)102, ((LPCREATESTRUCT)lParam)->hInstance, 0);
@@ -40,7 +50,26 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		hButton8 = CreateWindow(TEXT("BUTTON"), TEXT("ピンク"), WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON | BS_PUSHLIKE, 0, 0, 0, 0, hWnd, (HMENU)107, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		hButton9 = CreateWindow(TEXT("BUTTON"), TEXT("オレンジ"), WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON | BS_PUSHLIKE, 0, 0, 0, 0, hWnd, (HMENU)108, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, TEXT("EDIT"), TEXT("16"), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_AUTOHSCROLL, 0, 0, 0, 0, hWnd, (HMENU)109, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+		hScaleTrack = CreateWindow(TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS | TBS_ENABLESELRANGE | TBS_DOWNISLEFT, 0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
+		SendMessage(hScaleTrack, TBM_SETRANGE, TRUE, MAKELONG(10, 3200));
+		SendMessage(hScaleTrack, TBM_SETPAGESIZE, 0, 20);
+		SendMessage(hScaleTrack, TBM_SETTICFREQ, 20, 0);
+		SendMessage(hScaleTrack, TBM_SETPOS, TRUE, 100);
 		SendMessage(hButton3, BM_SETCHECK, BST_CHECKED, 0);
+
+		{
+			RECT rect;
+			GetClientRect(hWnd, &rect);
+			nDstWidth = nSrcWidth = rect.right;
+			nDstHeight = nSrcHeight = rect.bottom;
+			const HDC hdc = GetDC(hWnd);
+			hdcBitmap = CreateCompatibleDC(hdc);
+			hBitmap = CreateCompatibleBitmap(hdc, nSrcWidth, nSrcHeight);
+			SelectObject(hdcBitmap, hBitmap);
+			ReleaseDC(hWnd, hdc);
+			PatBlt(hdcBitmap, 0, 0, nSrcWidth, nSrcHeight, WHITENESS);
+		}
+
 		break;
 	case WM_SIZE:
 		MoveWindow(hButton1, 0, 0, 64, 64, TRUE);
@@ -53,17 +82,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		MoveWindow(hButton8, 448, 0, 64, 64, TRUE);
 		MoveWindow(hButton9, 512, 0, 64, 64, TRUE);
 		MoveWindow(hEdit, 512 + 64, 0, 64, 64, TRUE);
-		SendMessage(hWnd, WM_APP, 0, 0);
-		{
-			width = LOWORD(lParam);
-			height = HIWORD(lParam);
-			const HDC hdc = GetDC(hWnd);
-			hdcBitmap = CreateCompatibleDC(hdc);
-			hBitmap = CreateCompatibleBitmap(hdc, width, height);
-			SelectObject(hdcBitmap, hBitmap);
-			ReleaseDC(hWnd, hdc);
-			PatBlt(hdcBitmap, 0, 0, width, height, WHITENESS);
-		}
+		MoveWindow(hScaleTrack, 0, HIWORD(lParam) - 32, LOWORD(lParam), 32, TRUE);
 		break;
 	case WM_LBUTTONDOWN:
 		if (!bMouseDown)
@@ -72,14 +91,14 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			const int nPenWidth = GetDlgItemInt(hWnd, 109, 0, 0);
 			hPen = CreatePen(PS_SOLID, nPenWidth, color);
 			hOldPen = (HPEN)SelectObject(hdcBitmap, hPen);
-			MoveToEx(hdcBitmap, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam), 0);
+			MoveToEx(hdcBitmap, (int)((GET_X_LPARAM(lParam) - x)*100.0 / nScaleValue), (int)((GET_Y_LPARAM(lParam) - y)*100.0 / nScaleValue), 0);
 			bMouseDown = TRUE;
 		}
 		break;
 	case WM_MOUSEMOVE:
 		if (bMouseDown)
 		{
-			LineTo(hdcBitmap, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+			LineTo(hdcBitmap, (int)((GET_X_LPARAM(lParam) - x)*100.0 / nScaleValue), (int)((GET_Y_LPARAM(lParam) - y)*100.0 / nScaleValue));
 			InvalidateRect(hWnd, 0, 0);
 		}
 		break;
@@ -129,12 +148,25 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_PAINT:
 		{
 			PAINTSTRUCT ps;
-			HDC hdc = BeginPaint(hWnd, &ps);
+			const HDC hdc = BeginPaint(hWnd, &ps);
 			RECT rect;
 			GetClientRect(hWnd, &rect);
 			if (hdcBitmap)
 			{
-				BitBlt(hdc, 0, 0, rect.right, rect.bottom, hdcBitmap, 0, 0, SRCCOPY);
+				const double dScale = nScaleValue / 100.0;
+				int nOldStretchBltMode;
+				if (nScaleValue < 100)
+					nOldStretchBltMode = SetStretchBltMode(hdc, HALFTONE);
+				x = (int)((rect.right - nDstWidth) / 2.0);
+				y = (int)((rect.bottom - nDstHeight) / 2.0);
+				StretchBlt(hdc, x, y, nDstWidth, nDstHeight, hdcBitmap, 0, 0, nSrcWidth, nSrcHeight, SRCCOPY);
+				if (nScaleValue < 100)
+					SetStretchBltMode(hdc, nOldStretchBltMode);
+				MoveToEx(hdc, x, y, 0);
+				LineTo(hdc, x + nDstWidth, y);
+				LineTo(hdc, x + nDstWidth, y + nDstHeight);
+				LineTo(hdc, x, y + nDstHeight);
+				LineTo(hdc, x, y);
 			}
 			EndPaint(hWnd, &ps);
 		}
@@ -143,7 +175,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		switch (LOWORD(wParam))
 		{
 		case 100:
-			PatBlt(hdcBitmap, 0, 0, width, height, WHITENESS);
+			PatBlt(hdcBitmap, 0, 0, nSrcWidth, nSrcHeight, WHITENESS);
 			InvalidateRect(hWnd, 0, 0);
 			break;
 		case 101:
@@ -169,6 +201,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case 108:
 			color = RGB(255, 165, 0);
 			break;
+		case ID_EXIT:
+			PostMessage(hWnd, WM_CLOSE, 0, 0);
+			break;
+		}
+		break;
+	case WM_MOUSEWHEEL:
+		{
+			nScaleValue += GET_WHEEL_DELTA_WPARAM(wParam) / 40;
+			if (nScaleValue<10)nScaleValue = 10;
+			if (nScaleValue>3200)nScaleValue = 3200;
+			SendMessage(hScaleTrack, TBM_SETPOS, TRUE, nScaleValue);
+			nDstWidth = (int)(nScaleValue * nSrcWidth / 100.0);
+			nDstHeight = (int)(nScaleValue * nSrcHeight / 100.0);
+			InvalidateRect(hWnd, 0, 1);
+		}
+		break;
+	case WM_HSCROLL:
+		{
+			nScaleValue = SendMessage(hScaleTrack, TBM_GETPOS, 0, 0);
+			nDstWidth = (int)(nScaleValue * nSrcWidth / 100.0);
+			nDstHeight = (int)(nScaleValue * nSrcHeight / 100.0);
+			InvalidateRect(hWnd, 0, 1);
 		}
 		break;
 	case WM_APP:
@@ -192,33 +246,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int nCmdShow)
 {
-	MSG msg;
-	WNDCLASS wndclass = {
-		CS_HREDRAW | CS_VREDRAW,
-		WndProc,
-		0,
-		0,
-		hInstance,
-		0,
-		LoadCursor(0,IDC_ARROW),
-		(HBRUSH)(COLOR_WINDOW + 1),
-		MAKEINTRESOURCE(IDR_MENU1),
-		szClassName
-	};
+	MSG msg = { 0 };
+	const WNDCLASS wndclass = { CS_HREDRAW | CS_VREDRAW,WndProc,0,0,hInstance,0,LoadCursor(0,IDC_ARROW),(HBRUSH)(COLOR_WINDOW + 1),MAKEINTRESOURCE(IDR_MENU1),szClassName };
 	RegisterClass(&wndclass);
-	HWND hWnd = CreateWindow(
-		szClassName,
-		TEXT("MyPaint"),
-		WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-		CW_USEDEFAULT,
-		0,
-		CW_USEDEFAULT,
-		0,
-		0,
-		0,
-		hInstance,
-		0
-	);
+	const HWND hWnd = CreateWindow(szClassName, TEXT("MyPaint"), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, 0, 0, hInstance, 0);
 	ShowWindow(hWnd, SW_SHOWDEFAULT);
 	UpdateWindow(hWnd);
 	while (GetMessage(&msg, 0, 0, 0))
