@@ -1,13 +1,55 @@
 ﻿#pragma comment(linker,"\"/manifestdependency:type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
 #pragma comment(lib,"comctl32")
+#pragma comment(lib,"gdiplus")
 
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
+#include <gdiplus.h>
 #include "resource.h"
 
 TCHAR szClassName[] = TEXT("Window");
+
+Gdiplus::Bitmap* LoadBitmapFromResource(LPCTSTR pName, LPCTSTR pType, HMODULE hInst)
+{
+	Gdiplus::Bitmap* pImage = NULL;
+	const HRSRC hResource = FindResource(hInst, pName, pType);
+	if (!hResource)
+		return NULL;
+	const DWORD imageSize = SizeofResource(hInst, hResource);
+	if (!imageSize)
+		return NULL;
+	const void* pResourceData = LockResource(::LoadResource(hInst,
+		hResource));
+	if (!pResourceData)
+		return NULL;
+	const HGLOBAL hBuffer = GlobalAlloc(GMEM_MOVEABLE, imageSize);
+	if (hBuffer)
+	{
+		void* pBuffer = GlobalLock(hBuffer);
+		if (pBuffer)
+		{
+			CopyMemory(pBuffer, pResourceData, imageSize);
+			IStream* pStream = NULL;
+			if (CreateStreamOnHGlobal(hBuffer, TRUE, &pStream) == S_OK)
+			{
+				pImage = Gdiplus::Bitmap::FromStream(pStream);
+				pStream->Release();
+				if (pImage)
+				{
+					if (pImage->GetLastStatus() != Gdiplus::Ok)
+					{
+						delete pImage;
+						pImage = NULL;
+					}
+				}
+			}
+			GlobalUnlock(hBuffer);
+		}
+	}
+	return pImage;
+}
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -36,6 +78,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	static HPEN hPen;
 	static HPEN hOldPen;
 	static INT_PTR nScaleValue = 100;
+	static Gdiplus::Bitmap *pBitmapBorderRight;
+	static Gdiplus::Bitmap *pBitmapBorderBottom;
+	static Gdiplus::Bitmap *pBitmapBorderCorner;
 	switch (msg)
 	{
 	case WM_CREATE:
@@ -57,6 +102,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		SendMessage(hScaleTrack, TBM_SETPOS, TRUE, 100);
 		SendMessage(hButton3, BM_SETCHECK, BST_CHECKED, 0);
 
+		pBitmapBorderRight = LoadBitmapFromResource(MAKEINTRESOURCE(IDB_BORDER_RIGHT), TEXT("PNG"), ((LPCREATESTRUCT)lParam)->hInstance);
+		pBitmapBorderBottom = LoadBitmapFromResource(MAKEINTRESOURCE(IDB_BORDER_BOTTOM), TEXT("PNG"), ((LPCREATESTRUCT)lParam)->hInstance);
+		pBitmapBorderCorner = LoadBitmapFromResource(MAKEINTRESOURCE(IDB_BORDER_CORNER), TEXT("PNG"), ((LPCREATESTRUCT)lParam)->hInstance);		
+		
 		{
 			RECT rect;
 			GetClientRect(hWnd, &rect);
@@ -159,14 +208,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 					nOldStretchBltMode = SetStretchBltMode(hdc, HALFTONE);
 				x = (int)((rect.right - nDstWidth) / 2.0);
 				y = (int)((rect.bottom - nDstHeight) / 2.0);
+				{
+					Gdiplus::Graphics g(hdc);
+					g.SetClip(Gdiplus::Rect(x, y, nDstWidth, nDstHeight), Gdiplus::CombineMode::CombineModeExclude);
+					g.FillRectangle(&Gdiplus::SolidBrush(Gdiplus::Color(220, 230, 240)), Gdiplus::Rect(0, 0, rect.right, rect.bottom));
+					g.DrawImage(pBitmapBorderRight, x + nDstWidth, y + 8, 8, nDstHeight - 8);
+					g.DrawImage(pBitmapBorderBottom, x, y + nDstHeight, nDstWidth, 8);
+					g.DrawImage(pBitmapBorderCorner, x + nDstWidth, y + nDstHeight, 8, 8);
+				}
 				StretchBlt(hdc, x, y, nDstWidth, nDstHeight, hdcBitmap, 0, 0, nSrcWidth, nSrcHeight, SRCCOPY);
 				if (nScaleValue < 100)
 					SetStretchBltMode(hdc, nOldStretchBltMode);
-				MoveToEx(hdc, x, y, 0);
-				LineTo(hdc, x + nDstWidth, y);
-				LineTo(hdc, x + nDstWidth, y + nDstHeight);
-				LineTo(hdc, x, y + nDstHeight);
-				LineTo(hdc, x, y);
 			}
 			EndPaint(hWnd, &ps);
 		}
@@ -236,6 +288,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		break;
 	case WM_DESTROY:
 		SendMessage(hWnd, WM_APP, 0, 0);
+		delete pBitmapBorderRight;
+		delete pBitmapBorderBottom;
+		delete pBitmapBorderCorner;
 		PostQuitMessage(0);
 		break;
 	default:
@@ -246,8 +301,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int nCmdShow)
 {
+	ULONG_PTR gdiToken;
+	Gdiplus::GdiplusStartupInput gdiSI;
+	Gdiplus::GdiplusStartup(&gdiToken, &gdiSI, NULL);
 	MSG msg = { 0 };
-	const WNDCLASS wndclass = { CS_HREDRAW | CS_VREDRAW,WndProc,0,0,hInstance,0,LoadCursor(0,IDC_ARROW),(HBRUSH)(COLOR_WINDOW + 1),MAKEINTRESOURCE(IDR_MENU1),szClassName };
+	const WNDCLASS wndclass = { CS_HREDRAW | CS_VREDRAW,WndProc,0,0,hInstance,0,LoadCursor(0,IDC_ARROW),0/*(HBRUSH)(COLOR_WINDOW + 1)*/,MAKEINTRESOURCE(IDR_MENU1),szClassName };
 	RegisterClass(&wndclass);
 	const HWND hWnd = CreateWindow(szClassName, TEXT("MyPaint"), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, 0, 0, hInstance, 0);
 	ShowWindow(hWnd, SW_SHOWDEFAULT);
@@ -257,5 +315,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPreInst, LPSTR pCmdLine, int 
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+	Gdiplus::GdiplusShutdown(gdiToken);
 	return (int)msg.wParam;
 }

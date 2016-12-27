@@ -135,6 +135,9 @@
     <Manifest>
       <EnableDpiAwareness>PerMonitorHighDPIAware</EnableDpiAwareness>
     </Manifest>
+    <PostBuildEvent>
+      <Command>copy "$(TargetPath)" "$(ProjectDir)"</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -165,6 +168,11 @@
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="MyPaint.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Resource\shadow_bottom.png" />
+    <Image Include="Resource\shadow_corner.png" />
+    <Image Include="Resource\shadow_right.png" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

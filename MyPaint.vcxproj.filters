@@ -29,4 +29,15 @@
       <Filter>リソース ファイル</Filter>
     </ResourceCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="Resource\shadow_bottom.png">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+    <Image Include="Resource\shadow_corner.png">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+    <Image Include="Resource\shadow_right.png">
+      <Filter>リソース ファイル</Filter>
+    </Image>
+  </ItemGroup>
 </Project>
