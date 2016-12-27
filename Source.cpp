@@ -168,7 +168,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			const int nPenWidth = GetDlgItemInt(hWnd, 109, 0, 0);
 			hPen = CreatePen(PS_SOLID, nPenWidth, color);
 			hOldPen = (HPEN)SelectObject(hdcBitmap, hPen);
-			MoveToEx(hdcBitmap, p.x, p.y, 0);
+			MoveToEx(hdcBitmap, (int)((p.x - x)*100.0 / nScaleValue), (int)((p.y - y)*100.0 / nScaleValue), 0);
 			bTouchDown = TRUE;
 		}
 		break;
@@ -178,18 +178,22 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			POINTER_INFO pinfo;
 			GetPointerInfo(LOWORD(wParam), &pinfo);
 			POINT p = { pinfo.ptPixelLocation.x, pinfo.ptPixelLocation.y };
-			ScreenToClient(hWnd, &p);
-			LineTo(hdcBitmap, p.x, p.y);
+			ScreenToClient(hWnd, &p);			
+			LineTo(hdcBitmap, (int)((p.x - x)*100.0 / nScaleValue), (int)((p.y - y)*100.0 / nScaleValue));
 			InvalidateRect(hWnd, 0, 0);
+		}
+		else
+		{
+			SetCursor(LoadCursor(0, IDC_ARROW));
 		}
 		break;
 	case WM_POINTERUP:
 		if (bTouchDown)
 		{
-			POINTER_INFO pinfo;
-			GetPointerInfo(LOWORD(wParam), &pinfo);
-			POINT p = { pinfo.ptPixelLocation.x, pinfo.ptPixelLocation.y };
-			ScreenToClient(hWnd, &p);
+			//POINTER_INFO pinfo;
+			//GetPointerInfo(LOWORD(wParam), &pinfo);
+			//POINT p = { pinfo.ptPixelLocation.x, pinfo.ptPixelLocation.y };
+			//ScreenToClient(hWnd, &p);
 			SelectObject(hdcBitmap, hOldPen);
 			bTouchDown = FALSE;
 		}
