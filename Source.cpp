@@ -11,6 +11,25 @@
 
 TCHAR szClassName[] = TEXT("Window");
 
+int CALLBACK DialogProc(HWND hDlg, unsigned msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		SetDlgItemInt(hDlg, IDC_EDIT_WIDTH, LPSIZE(lParam)->cx, FALSE);
+		SetDlgItemInt(hDlg, IDC_EDIT_HEIGHT, LPSIZE(lParam)->cy, FALSE);
+		return TRUE;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, LOWORD(wParam));
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
 Gdiplus::Bitmap* LoadBitmapFromResource(LPCTSTR pName, LPCTSTR pType, HMODULE hInst)
 {
 	Gdiplus::Bitmap* pImage = NULL;
@@ -96,7 +115,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		hButton9 = CreateWindow(TEXT("BUTTON"), TEXT("オレンジ"), WS_VISIBLE | WS_CHILD | BS_AUTORADIOBUTTON | BS_PUSHLIKE, 0, 0, 0, 0, hWnd, (HMENU)108, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		hEdit = CreateWindowEx(WS_EX_CLIENTEDGE, TEXT("EDIT"), TEXT("16"), WS_VISIBLE | WS_CHILD | ES_NUMBER | ES_AUTOHSCROLL, 0, 0, 0, 0, hWnd, (HMENU)109, ((LPCREATESTRUCT)lParam)->hInstance, 0);
 		hScaleTrack = CreateWindow(TRACKBAR_CLASS, 0, WS_CHILD | WS_VISIBLE | TBS_AUTOTICKS | TBS_ENABLESELRANGE | TBS_DOWNISLEFT, 0, 0, 0, 0, hWnd, 0, ((LPCREATESTRUCT)lParam)->hInstance, 0);
-		SendMessage(hScaleTrack, TBM_SETRANGE, TRUE, MAKELONG(10, 3200));
+		SendMessage(hScaleTrack, TBM_SETRANGE, TRUE, MAKELONG(1, 3200));
 		SendMessage(hScaleTrack, TBM_SETPAGESIZE, 0, 20);
 		SendMessage(hScaleTrack, TBM_SETTICFREQ, 20, 0);
 		SendMessage(hScaleTrack, TBM_SETPOS, TRUE, 100);
@@ -190,10 +209,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_POINTERUP:
 		if (bTouchDown)
 		{
-			//POINTER_INFO pinfo;
-			//GetPointerInfo(LOWORD(wParam), &pinfo);
-			//POINT p = { pinfo.ptPixelLocation.x, pinfo.ptPixelLocation.y };
-			//ScreenToClient(hWnd, &p);
 			SelectObject(hdcBitmap, hOldPen);
 			bTouchDown = FALSE;
 		}
@@ -260,12 +275,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		case ID_EXIT:
 			PostMessage(hWnd, WM_CLOSE, 0, 0);
 			break;
+		case ID_SIZE_CHANGE:
+			{
+				SIZE size = {nSrcWidth, nSrcHeight};
+				DialogBoxParam(GetModuleHandle(0), MAKEINTRESOURCE(IDD_SIZE_CHANGE), hWnd, DialogProc, (LPARAM)&size);
+			}
+			break;
 		}
 		break;
 	case WM_MOUSEWHEEL:
 		{
 			nScaleValue += GET_WHEEL_DELTA_WPARAM(wParam) / 40;
-			if (nScaleValue<10)nScaleValue = 10;
+			if (nScaleValue<1)nScaleValue = 1;
 			if (nScaleValue>3200)nScaleValue = 3200;
 			SendMessage(hScaleTrack, TBM_SETPOS, TRUE, nScaleValue);
 			nDstWidth = (int)(nScaleValue * nSrcWidth / 100.0);
